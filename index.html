@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Madrasa Exam Result</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- ✅ FAVICON FIX (404 error ഒഴിവാക്കാൻ) -->
+  <link rel="icon" href="data:,">
+
+  <style>
+    body{
+      margin:0;
+      font-family:Arial, sans-serif;
+      background:#f2f4f7;
+    }
+    .container{
+      min-height:100vh;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:12px;
+    }
+    .card{
+      width:100%;
+      max-width:420px;
+      background:#fff;
+      padding:22px;
+      border-radius:22px;
+      box-shadow:0 10px 30px rgba(0,0,0,.12);
+    }
+    h2{
+      text-align:center;
+      margin:0;
+      letter-spacing:1px;
+    }
+    small{
+      display:block;
+      text-align:center;
+      margin-bottom:18px;
+      color:#555;
+    }
+    label{
+      font-size:14px;
+      font-weight:600;
+    }
+    input,select{
+      width:100%;
+      padding:14px;
+      margin-top:6px;
+      margin-bottom:14px;
+      border-radius:14px;
+      border:1px solid #ccc;
+      box-sizing:border-box;
+      font-size:15px;
+    }
+    button{
+      width:100%;
+      padding:14px;
+      border:none;
+      border-radius:16px;
+      font-size:15px;
+      cursor:pointer;
+    }
+    .view{
+      background:#00796b;
+      color:#fff;
+    }
+    .admin{
+      background:#5c6bc0;
+      color:#fff;
+      margin-top:10px;
+    }
+
+    /* ✅ MADRASA NAME – mobile single line fix */
+    #mname{
+      text-align:center;
+      font-weight:bold;
+      margin-bottom:6px;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+  </style>
+</head>
+
+<body>
+<div class="container">
+  <div class="card">
+
+    <!-- MADRASA NAME -->
+    <h2 id="mname">Madrasa Exam Result</h2>
+    <small>Result Search Portal</small>
+
+    <label>Madrasa ID</label>
+    <input id="mid" placeholder="Enter Madrasa ID" onblur="loadMadrasaName()">
+
+    <label>Class</label>
+    <select id="cls">
+      <option value="1">1</option>
+      <option value="2">2</option>
+      <option value="3">3</option>
+      <option value="4">4</option>
+      <option value="5">5</option>
+      <option value="6">6</option>
+      <option value="7">7</option>
+      <option value="8">8</option>
+      <option value="9">9</option>
+      <option value="10">10</option>
+      <option value="11">Plus One</option>
+      <option value="12">Plus Two</option>
+    </select>
+
+    <label>Register Number</label>
+    <input id="reg"
+           placeholder="Register No"
+           style="text-transform:uppercase">
+
+    <button class="view" onclick="viewResult()">View Result</button>
+    <button class="admin" onclick="adminLogin()">Admin Login</button>
+
+  </div>
+</div>
+
+<!-- ================= FIREBASE + SCRIPT ================= -->
+<script type="module">
+  /* Firebase core */
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
+
+  /* Firestore */
+  import {
+    getFirestore,
+    doc,
+    getDoc
+  } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
+
+  /* Firebase config */
+  const firebaseConfig = {
+    apiKey: "AIzaSyAYqP10IiFNHEgOEn3ptlIUcj_wLY7XKZs",
+    authDomain: "madrasa-result-system-1698b.firebaseapp.com",
+    projectId: "madrasa-result-system-1698b",
+    storageBucket: "madrasa-result-system-1698b.appspot.com",
+    messagingSenderId: "547725226515",
+    appId: "1:547725226515:web:baa687160a93af374185e6"
+  };
+
+  /* Initialize Firebase */
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+
+  /* LOAD MADRASA NAME */
+  window.loadMadrasaName = async function(){
+    const mid = document.getElementById("mid").value.trim();
+    const box = document.getElementById("mname");
+
+    if(mid === ""){
+      box.innerText = "Madrasa Exam Result";
+      return;
+    }
+
+    try{
+      const snap = await getDoc(doc(db, "madrasas", mid));
+      if(snap.exists()){
+        box.innerText = snap.data().name;
+      }else{
+        box.innerText = "Madrasa Exam Result";
+      }
+    }catch{
+      box.innerText = "Madrasa Exam Result";
+    }
+  }
+
+  /* VIEW RESULT */
+  window.viewResult = function(){
+    const mid = document.getElementById("mid").value.trim();
+    const cls = document.getElementById("cls").value;
+    const reg = document.getElementById("reg").value.trim();
+
+    if(mid === "" || reg === ""){
+      alert("Please enter Madrasa ID and Register Number");
+      return;
+    }
+
+    window.location.href =
+      "result.html?mid=" + encodeURIComponent(mid) +
+      "&class=" + encodeURIComponent(cls) +
+      "&reg=" + encodeURIComponent(reg);
+  }
+
+  /* ADMIN LOGIN */
+  window.adminLogin = function(){
+    const mid = document.getElementById("mid").value.trim();
+    if(mid === ""){
+      alert("Enter Madrasa ID");
+      return;
+    }
+    window.location.href = "login.html?mid=" + encodeURIComponent(mid);
+  }
+</script>
+
+</body>
+</html>

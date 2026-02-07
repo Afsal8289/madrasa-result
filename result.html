@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Madrasa Exam Result</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+<style>
+body{
+  margin:0;
+  font-family:Arial, sans-serif;
+  background:#f2f4f7;
+}
+.container{
+  max-width:900px;
+  margin:20px auto;
+  padding:0 12px;
+}
+.card{
+  background:#fff;
+  border-radius:18px;
+  padding:20px;
+  box-shadow:0 6px 20px rgba(0,0,0,.08);
+}
+.header{text-align:center}
+.header h2{margin:0}
+.header small{color:#555}
+.hr{height:1px;background:#ddd;margin:15px 0}
+.grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px 20px;
+}
+@media(max-width:640px){
+  .grid{grid-template-columns:1fr}
+}
+table{
+  width:100%;
+  border-collapse:collapse;
+  margin-top:15px;
+}
+th,td{
+  border:1px solid #ddd;
+  padding:10px;
+}
+th{background:#f5f5f5}
+.status-pass{color:green;font-weight:bold}
+.status-fail{color:red;font-weight:bold}
+.buttons{
+  margin-top:18px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+button{
+  padding:14px;
+  border:none;
+  border-radius:14px;
+  font-size:15px;
+  cursor:pointer;
+}
+.download{background:#00796b;color:#fff}
+.back{background:#607d8b;color:#fff}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+<div class="card" id="resultCard">
+
+  <div class="header">
+    <h2 id="madName">Madrasa Exam Result</h2>
+    <small>Result Sheet</small>
+  </div>
+
+  <div class="hr"></div>
+
+  <div class="grid">
+    <div><b>Name:</b> <span id="sName">-</span></div>
+    <div><b>Register No:</b> <span id="sReg">-</span></div>
+    <div><b>Class:</b> <span id="sClass">-</span></div>
+    <div><b>Rank:</b> <span id="sRank">-</span></div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Subject</th>
+        <th>Marks</th>
+      </tr>
+    </thead>
+    <tbody id="marks"></tbody>
+  </table>
+
+  <div class="grid" style="margin-top:15px">
+    <div><b>Total:</b> <span id="total">-</span></div>
+    <div><b>Status:</b> <span id="status">-</span></div>
+  </div>
+
+</div>
+
+<div class="buttons">
+  <button class="download" onclick="downloadPDF()">Download PDF</button>
+  <button class="back" onclick="history.back()">Back</button>
+</div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+<script>
+firebase.initializeApp({
+  apiKey: "AIzaSyAYqP10IiFNHEgOEn3ptlIUcj_wLY7XKZs",
+  authDomain: "madrasa-result-system-1698b.firebaseapp.com",
+  projectId: "madrasa-result-system-1698b"
+});
+
+const db = firebase.firestore();
+
+const params = new URLSearchParams(location.search);
+const mid = params.get("mid");
+const cls = params.get("class");
+const reg = params.get("reg");
+
+async function loadResult(){
+
+  const madSnap = await db.collection("madrasas").doc(mid).get();
+  if(!madSnap.exists){
+    alert("Invalid Madrasa ID");
+    return;
+  }
+  const mad = madSnap.data();
+  madName.innerText = mad.name;
+
+  const stuSnap = await db.collection("students")
+    .where("madrasaId","==",mid)
+    .where("class","==",cls)
+    .where("reg","==",reg)
+    .get();
+
+  if(stuSnap.empty){
+    alert("Result not found");
+    history.back();
+    return;
+  }
+
+  const stu = stuSnap.docs[0].data();
+  sName.innerText = stu.name;
+  sReg.innerText = reg;
+  sClass.innerText = cls;
+
+  const resSnap = await db.collection("results")
+    .where("madrasaId","==",mid)
+    .where("class","==",cls)
+    .where("reg","==",reg)
+    .get();
+
+  sRank.innerText = resSnap.empty ? "-" : resSnap.docs[0].data().rank;
+
+  const markSnap = await db.collection("marks")
+    .where("madrasaId","==",mid)
+    .where("class","==",cls)
+    .where("reg","==",reg)
+    .get();
+
+  let total = 0;
+  let status = "PASSED";
+  marks.innerHTML = "";
+
+  markSnap.forEach(d=>{
+    const m = d.data();
+    marks.innerHTML += `
+  <tr>
+    <td>${m.subject}</td>
+    <td>${m.mark}</td>
+  </tr>
+`;
+    total += Number(m.mark);
+    if(m.mark < mad.passmark) status = "FAILED";
+  });
+
+  document.getElementById("total").innerText = total;
+  statusEl = document.getElementById("status");
+  statusEl.innerText = status;
+  statusEl.className = status==="PASSED" ? "status-pass" : "status-fail";
+}
+
+loadResult();
+
+function downloadPDF(){
+  html2pdf().from(document.getElementById("resultCard")).save();
+}
+</script>
+
+</body>
+</html>

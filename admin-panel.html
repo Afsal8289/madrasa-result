@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Admin Panel</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<style>
+body{
+  font-family: Arial, sans-serif;
+  background:#f2f4f8;
+  margin:0;
+  overflow-x:hidden; /* 🔥 important */
+}
+
+.container{
+  max-width:1100px;
+  margin:auto;
+  padding:15px;
+  box-sizing:border-box;
+}
+
+.card{
+  background:#fff;
+  border-radius:12px;
+  padding:15px;
+  margin-bottom:15px;
+  box-sizing:border-box;
+}
+
+h2,h3{
+  margin:0 0 10px;
+}
+
+.row{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  width:100%;
+  box-sizing:border-box;
+}
+
+.row > *{
+  flex:1 1 100%;
+  min-width:0;          /* 🔥 very important */
+  box-sizing:border-box;
+}
+
+input,select{
+  padding:10px;
+  border-radius:8px;
+  border:1px solid #ccc;
+  width:100%;
+  box-sizing:border-box;
+}
+
+button{
+  padding:10px 15px;
+  border:none;
+  border-radius:8px;
+  cursor:pointer;
+  background:#007bff;
+  color:#fff;
+  width:100%;
+}
+
+button.danger{background:#dc3545}
+button.secondary{background:#6c757d}
+
+.logout{
+  float:right;
+  background:#333;
+  width:auto;           /* 🔥 button stretch തടയും */
+}
+
+.list{
+  margin-top:10px;
+}
+
+.item{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:10px;
+  padding:6px 0;
+  border-bottom:1px solid #eee;
+  flex-wrap:wrap;
+}
+
+@media (min-width: 768px){
+  .row > *{
+    flex:1;
+  }
+  button{
+    width:auto;
+  }
+}
+
+/* Delete button small */
+button.delete-btn{
+  width:auto !important;
+  padding:6px 12px;
+  font-size:13px;
+  border-radius:6px;
+}
+</style>
+</head>
+
+<body>
+<div class="container">
+
+<div class="card">
+  <h2 id="title">Admin Panel</h2>
+  <button class="logout" onclick="logout()">Logout</button>
+</div>
+
+<!-- SETTINGS -->
+<div class="card">
+  <h3>Settings</h3>
+  <div class="row">
+    <input id="mname" placeholder="Madrasa Name">
+    <input id="passmark" type="number" placeholder="Pass Mark">
+    <button onclick="saveSettings()">Save</button>
+  </div>
+</div>
+
+<!-- SUBJECTS -->
+<div class="card">
+  <h3>Subjects</h3>
+  <div class="row">
+    <select id="subClass"></select>
+    <input id="subName" placeholder="Subject Name">
+    <button onclick="addSubject()">Add</button>
+  </div>
+  <div class="list" id="subjectList"></div>
+</div>
+
+<!-- STUDENTS -->
+<div class="card">
+  <h3>Students</h3>
+  <div class="row">
+    <select id="stuClass"></select>
+    <input id="reg" placeholder="Register No">
+    <input id="sname" placeholder="Student Name">
+    <button onclick="addStudent()">Add</button>
+  </div>
+  <div class="list" id="studentList"></div>
+</div>
+
+<!-- MARKS -->
+<div class="card">
+  <h3>Marks</h3>
+  <div class="row">
+    <select id="markClass"></select>
+    <select id="markReg"></select>
+    <select id="markSub"></select>
+    <input id="mark" type="number" placeholder="Mark">
+    <button onclick="saveMark()">Save</button>
+  </div>
+  <div class="list" id="markList"></div>
+</div>
+
+<!-- RESULT / RANK -->
+<div class="card">
+  <h3>Final Result (Manual Rank)</h3>
+  <div class="row">
+    <select id="resClass"></select>
+    <select id="resReg"></select>
+    <input id="rank" type="number" placeholder="Rank">
+    <button onclick="saveResult()">Save / Update</button>
+  </div>
+</div>
+
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
+import { getFirestore, collection, addDoc, getDocs, query, where, doc, getDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
+import { getAuth, signOut } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";
+
+const app = initializeApp({
+  apiKey: "AIzaSyAYqP10IiFNHEgOEn3ptlIUcj_wLY7XKZs",
+  authDomain: "madrasa-result-system-1698b.firebaseapp.com",
+  projectId: "madrasa-result-system-1698b",
+});
+
+const db = getFirestore(app);
+const auth = getAuth(app);
+
+const mid = new URLSearchParams(location.search).get("mid");
+const classes = [1,2,3,4,5,6,7,8,9,10,11,12];
+
+function fillSelect(id){
+  const s=document.getElementById(id);
+  s.innerHTML="<option value=''>Select Class</option>";
+  classes.forEach(c=>s.innerHTML+=`<option value="${c}">${c}</option>`);
+}
+["subClass","stuClass","markClass","resClass"].forEach(fillSelect);
+
+/* SETTINGS */
+async function loadSettings(){
+  const d=await getDoc(doc(db,"madrasas",mid));
+  if(d.exists()){
+    mname.value=d.data().name;
+    passmark.value=d.data().passmark;
+    title.innerText=d.data().name;
+  }
+}
+loadSettings();
+
+window.saveSettings=()=>updateDoc(doc(db,"madrasas",mid),{
+  name:mname.value,
+  passmark:Number(passmark.value)
+});
+
+/* SUBJECTS */
+subClass.onchange=loadSubjects;
+async function loadSubjects(){
+  subjectList.innerHTML="";
+  const q=query(collection(db,"subjects"),
+    where("madrasaId","==",mid),
+    where("class","==",subClass.value)
+  );
+  (await getDocs(q)).forEach(d=>{
+    subjectList.innerHTML+=`
+      <div class="item">
+        ${d.data().subject}
+        <button class="danger delete-btn"
+        onclick="del('${d.id}','subjects')">
+  Delete
+</button>
+      </div>`;
+  });
+}
+window.addSubject=async()=>{
+  await addDoc(collection(db,"subjects"),{
+    madrasaId:mid,
+    class:subClass.value,
+    subject:subName.value
+  });
+  subName.value="";
+  loadSubjects();
+};
+
+/* STUDENTS */
+stuClass.onchange=loadStudents;
+async function loadStudents(){
+  studentList.innerHTML="";
+  const q=query(collection(db,"students"),
+    where("madrasaId","==",mid),
+    where("class","==",stuClass.value)
+  );
+  (await getDocs(q)).forEach(d=>{
+    studentList.innerHTML+=`
+      <div class="item">
+        ${d.data().reg} - ${d.data().name}
+       <button class="danger delete-btn"
+        onclick="del('${d.id}','students')">
+  Delete
+</button>
+      </div>`;
+  });
+}
+window.addStudent=async()=>{
+  await addDoc(collection(db,"students"),{
+    madrasaId:mid,
+    class:stuClass.value,
+    reg:reg.value,
+    name:sname.value
+  });
+  reg.value="";sname.value="";
+  loadStudents();
+};
+
+/* MARKS */
+markClass.onchange=loadMarkSelectors;
+async function loadMarkSelectors(){
+  markReg.innerHTML="<option value=''>Register</option>";
+  markSub.innerHTML="<option value=''>Subject</option>";
+  markList.innerHTML="";
+
+  let q=query(collection(db,"students"),
+    where("madrasaId","==",mid),
+    where("class","==",markClass.value)
+  );
+  (await getDocs(q)).forEach(d=>markReg.innerHTML+=`<option>${d.data().reg}</option>`);
+
+  q=query(collection(db,"subjects"),
+    where("madrasaId","==",mid),
+    where("class","==",markClass.value)
+  );
+  (await getDocs(q)).forEach(d=>markSub.innerHTML+=`<option>${d.data().subject}</option>`);
+
+  markReg.onchange=loadMarks;
+}
+async function loadMarks(){
+  markList.innerHTML="";
+  const q=query(collection(db,"marks"),
+    where("madrasaId","==",mid),
+    where("class","==",markClass.value),
+    where("reg","==",markReg.value)
+  );
+  (await getDocs(q)).forEach(d=>{
+    markList.innerHTML+=`
+      <div class="item">
+        ${d.data().subject} : ${d.data().mark}
+        <button class="danger delete-btn"
+        onclick="del('${d.id}','marks')">
+  Delete
+</button>
+      </div>`;
+  });
+}
+window.saveMark=async()=>{
+  await addDoc(collection(db,"marks"),{
+    madrasaId:mid,
+    class:markClass.value,
+    reg:markReg.value,
+    subject:markSub.value,
+    mark:Number(mark.value)
+  });
+  mark.value="";
+  loadMarks();
+};
+
+/* RESULT / RANK */
+resClass.onchange=loadResultRegs;
+async function loadResultRegs(){
+  resReg.innerHTML="<option value=''>Register</option>";
+  const q=query(collection(db,"students"),
+    where("madrasaId","==",mid),
+    where("class","==",resClass.value)
+  );
+  (await getDocs(q)).forEach(d=>resReg.innerHTML+=`<option>${d.data().reg}</option>`);
+}
+
+window.saveResult=async()=>{
+  let total=0,fail=false;
+  const pm=Number(passmark.value);
+
+  let q=query(collection(db,"marks"),
+    where("madrasaId","==",mid),
+    where("class","==",resClass.value),
+    where("reg","==",resReg.value)
+  );
+  (await getDocs(q)).forEach(d=>{
+    total+=d.data().mark;
+    if(d.data().mark<pm) fail=true;
+  });
+
+  q=query(collection(db,"results"),
+    where("madrasaId","==",mid),
+    where("class","==",resClass.value),
+    where("reg","==",resReg.value)
+  );
+  const snap=await getDocs(q);
+  if(snap.empty){
+    await addDoc(collection(db,"results"),{
+      madrasaId:mid,
+      class:resClass.value,
+      reg:resReg.value,
+      total,
+      result:fail?"FAILED":"PASSED",
+      rank:Number(rank.value)
+    });
+  }else{
+    await updateDoc(doc(db,"results",snap.docs[0].id),{
+      total,
+      result:fail?"FAILED":"PASSED",
+      rank:Number(rank.value)
+    });
+  }
+  alert("Result saved");
+};
+
+window.del=async(id,col)=>{
+  if(confirm("Delete?")){
+    await deleteDoc(doc(db,col,id));
+    location.reload();
+  }
+};
+
+window.logout=async()=>{
+  await signOut(auth);
+  location.href="index.html";
+};
+</script>
+</body>
+</html>
