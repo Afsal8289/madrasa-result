@@ -5,29 +5,73 @@
 <meta charset="UTF-8">
 <title>Admin Panel</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
 <style>
-body{ font-family: Arial, sans-serif; background:#f2f4f8; margin:0; overflow-x:hidden; }
+body{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background:#f2f4f8; margin:0; overflow-x:hidden; }
 .container{ max-width:1100px; margin:auto; padding:15px; box-sizing:border-box; }
-.card{ background:#fff; border-radius:12px; padding:15px; margin-bottom:15px; box-sizing:border-box; }
-h2,h3{ margin:0 0 10px; }
-.row{ display:flex; gap:10px; flex-wrap:wrap; width:100%; box-sizing:border-box; margin-bottom: 10px; }
+
+.card{ 
+  background:#fff; border-radius:12px; padding:20px; margin-bottom:15px; box-sizing:border-box; 
+  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+h2,h3{ margin:0 0 15px; color: #333; }
+
+.row{ display:flex; gap:10px; flex-wrap:wrap; width:100%; box-sizing:border-box; margin-bottom: 10px; align-items: center;}
 .row > *{ flex:1 1 100%; min-width:0; box-sizing:border-box; }
-input,select{ padding:10px; border-radius:8px; border:1px solid #ccc; width:100%; box-sizing:border-box; }
-button{ padding:10px 15px; border:none; border-radius:8px; cursor:pointer; background:#007bff; color:#fff; width:100%; }
+
+input,select{ padding:12px; border-radius:8px; border:1px solid #ddd; width:100%; box-sizing:border-box; outline:none; transition:0.3s;}
+input:focus, select:focus{ border-color: #007bff; }
+
+/* General Buttons */
+button{ padding:12px 15px; border:none; border-radius:8px; cursor:pointer; background:#007bff; color:#fff; width:100%; font-weight:bold; transition:0.2s; }
+button:hover{ opacity: 0.9; }
 button.danger{ background:#dc3545; } 
-button.secondary{ background:#6c757d; }
-.logout{ float:right; background:#333; width:auto; }
-.list{ margin-top:10px; }
-.item{ display:flex; justify-content:space-between; align-items:center; gap:10px; padding:6px 0; border-bottom:1px solid #eee; flex-wrap:wrap; }
+button.del-all-btn { background: #8b0000; margin-top:5px; }
+.logout{ float:right; background:#333; width:auto; padding: 8px 15px; font-size: 14px;}
+
+/* Lists */
+.list{ margin-top:15px; }
+.item{ 
+  display:flex; justify-content:space-between; align-items:center; gap:10px; padding:10px; 
+  border-bottom:1px solid #eee; flex-wrap:wrap; background: #fff;
+}
+.item:last-child{ border-bottom: none; }
+
+/* ICON BUTTONS (Edit/Delete) */
+.action-btns { display:flex; gap: 8px; }
+button.icon-btn {
+  width: 35px !important;
+  height: 35px;
+  padding: 0;
+  border-radius: 50%; /* Circle shape */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+button.edit-btn { background: #ffc107; color: #333; }
+button.delete-btn { background: #ffdddd; color: #dc3545; }
+
+/* Student Name Preview */
+.name-hint {
+  width: 100%;
+  color: #007bff;
+  font-weight: bold;
+  font-size: 0.95rem;
+  margin-top: -5px;
+  margin-bottom: 10px;
+  padding-left: 5px;
+  display: block;
+}
 
 @media (min-width: 768px){
   .row > *{ flex:1; }
   button{ width:auto; }
+  button.del-all-btn { margin-top:0; }
+  .name-hint { width: auto; margin-top: 0; margin-bottom: 0; flex: 0 0 100%; text-align: left;}
 }
-
-button.delete-btn{ width:auto !important; padding:6px 12px; font-size:13px; border-radius:6px; }
-.del-all-btn { background: #8b0000; }
 </style>
 </head>
 
@@ -49,7 +93,7 @@ button.delete-btn{ width:auto !important; padding:6px 12px; font-size:13px; bord
 </div>
 
 <div class="card">
-  <h3>Subjects (First Added Shows First)</h3>
+  <h3>Subjects</h3>
   <div class="row">
     <select id="subClass"></select>
     <input id="subName" placeholder="Subject Name">
@@ -62,24 +106,27 @@ button.delete-btn{ width:auto !important; padding:6px 12px; font-size:13px; bord
   <h3>Students</h3>
   <div class="row">
     <select id="stuClass"></select>
-    <input id="reg" type="text" placeholder="Register No (e.g., B0506)">
+    <input id="reg" type="text" placeholder="Register No">
     <input id="sname" placeholder="Student Name">
-    <button onclick="addStudent()">Add</button>
+    
+    <button id="addStuBtn" onclick="addStudent()">Add</button> 
     <button class="danger del-all-btn" onclick="deleteAllStudents()">Delete All</button>
   </div>
   <div class="list" id="studentList"></div>
 </div>
 
 <div class="card">
-  <h3>Marks</h3>
+  <h3>Marks (Auto Update)</h3>
   <div class="row">
     <select id="markClass"></select>
     <select id="markReg"></select>
     <select id="markSub"></select>
     <input id="mark" type="number" placeholder="Mark">
-    <button onclick="saveMark()">Save</button>
+    <button onclick="saveMark()">Save / Update</button>
     <button class="danger del-all-btn" onclick="deleteAllMarks()">Delete All</button>
   </div>
+  <small id="markStuName" class="name-hint"></small> 
+  
   <div class="list" id="markList"></div>
 </div>
 
@@ -91,6 +138,7 @@ button.delete-btn{ width:auto !important; padding:6px 12px; font-size:13px; bord
     <input id="rank" type="number" placeholder="Rank">
     <button onclick="saveResult()">Save / Update</button>
   </div>
+  <small id="resStuName" class="name-hint"></small>
 </div>
 
 </div>
@@ -111,6 +159,7 @@ const auth = getAuth(app);
 
 const mid = new URLSearchParams(location.search).get("mid");
 const classes = [1,2,3,4,5,6,7,8,9,10,11,12];
+let studentDataMap = {}; // To store Name vs Reg mapping
 
 function fillSelect(id){
   const s=document.getElementById(id);
@@ -135,7 +184,7 @@ window.saveSettings=()=>updateDoc(doc(db,"madrasas",mid),{
   passmark:Number(passmark.value)
 });
 
-/* SUBJECTS - SORTED BY ADDED ORDER */
+/* SUBJECTS */
 subClass.onchange=loadSubjects;
 async function loadSubjects(){
   subjectList.innerHTML="";
@@ -147,23 +196,19 @@ async function loadSubjects(){
   const snap = await getDocs(q);
   let subjects = [];
   snap.forEach(d => subjects.push({ id: d.id, ...d.data() }));
-
-  // SORT BY createdAt timestamp (Oldest first)
   subjects.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
 
   subjects.forEach(s => {
     subjectList.innerHTML+=`
       <div class="item">
         ${s.subject}
-        <button class="danger delete-btn" onclick="del('${s.id}','subjects')">Delete</button>
+        <button class="icon-btn delete-btn" onclick="del('${s.id}','subjects')"><i class="fas fa-trash"></i></button>
       </div>`;
   });
 }
 
 window.addSubject=async()=>{
   if(!subClass.value || !subName.value) return alert("Select Class and Enter Subject Name");
-  
-  // Adding createdAt timestamp
   await addDoc(collection(db,"subjects"),{
     madrasaId:mid,
     class:subClass.value,
@@ -174,8 +219,15 @@ window.addSubject=async()=>{
   loadSubjects();
 };
 
-/* STUDENTS - ALPHANUMERIC SORT */
-stuClass.onchange=loadStudents;
+/* STUDENTS */
+let editingStudentId = null;
+
+stuClass.onchange=()=>{
+    editingStudentId = null; 
+    document.getElementById("addStuBtn").innerText = "Add";
+    reg.value = ""; sname.value = "";
+    loadStudents();
+};
 
 async function loadStudents(){
   studentList.innerHTML="";
@@ -186,44 +238,58 @@ async function loadStudents(){
   
   const snapshot = await getDocs(q);
   let students = [];
-  
-  snapshot.forEach(d => {
-    students.push({ id: d.id, ...d.data() });
-  });
+  snapshot.forEach(d => students.push({ id: d.id, ...d.data() }));
 
-  // SORTING: Alphanumeric Sort (B1, B2... G1, G2)
+  // Sort Alphanumeric
   students.sort((a, b) => a.reg.toString().localeCompare(b.reg.toString(), undefined, { numeric: true, sensitivity: 'base' }));
 
   students.forEach(s => {
     studentList.innerHTML+=`
       <div class="item">
-        ${s.reg} - ${s.name}
-        <button class="danger delete-btn" onclick="del('${s.id}','students')">Delete</button>
+        <span style="font-weight:500">${s.reg} - ${s.name}</span>
+        <div class="action-btns">
+            <button class="icon-btn edit-btn" onclick="editStudent('${s.id}', '${s.reg}', '${s.name}')"><i class="fas fa-pen"></i></button>
+            <button class="icon-btn delete-btn" onclick="del('${s.id}','students')"><i class="fas fa-trash"></i></button>
+        </div>
       </div>`;
   });
 }
 
+window.editStudent = (id, r, n) => {
+    editingStudentId = id;
+    reg.value = r;
+    sname.value = n;
+    document.getElementById("addStuBtn").innerText = "Update"; 
+    window.scrollTo(0, 0); 
+};
+
 window.addStudent=async()=>{
   if(!stuClass.value || !reg.value || !sname.value) return alert("Fill all fields");
-  await addDoc(collection(db,"students"),{
-    madrasaId:mid,
-    class:stuClass.value,
-    reg:reg.value, // Now accepts strings like "B0506"
-    name:sname.value
-  });
+  
+  if(editingStudentId) {
+      await updateDoc(doc(db, "students", editingStudentId), {
+          reg: reg.value,
+          name: sname.value
+      });
+      alert("Student Updated!");
+      editingStudentId = null;
+      document.getElementById("addStuBtn").innerText = "Add";
+  } else {
+      await addDoc(collection(db,"students"),{
+        madrasaId:mid,
+        class:stuClass.value,
+        reg:reg.value,
+        name:sname.value
+      });
+  }
   reg.value=""; sname.value="";
   loadStudents();
 };
 
-// BULK DELETE STUDENTS
 window.deleteAllStudents = async () => {
     if(!stuClass.value) return alert("Select a class first");
-    if(!confirm("Are you sure you want to DELETE ALL students in Class " + stuClass.value + "?")) return;
-
-    const q = query(collection(db, "students"),
-        where("madrasaId", "==", mid),
-        where("class", "==", stuClass.value)
-    );
+    if(!confirm("DELETE ALL students in Class " + stuClass.value + "?")) return;
+    const q = query(collection(db, "students"), where("madrasaId", "==", mid), where("class", "==", stuClass.value));
     const snapshot = await getDocs(q);
     const batch = writeBatch(db);
     snapshot.docs.forEach(doc => batch.delete(doc.ref));
@@ -238,37 +304,45 @@ async function loadMarkSelectors(){
   markReg.innerHTML="<option value=''>Register</option>";
   markSub.innerHTML="<option value=''>Subject</option>";
   markList.innerHTML="";
+  markStuName.innerText = ""; // Clear name
+  studentDataMap = {}; // Clear map
 
-  let q=query(collection(db,"students"),
-    where("madrasaId","==",mid),
-    where("class","==",markClass.value)
-  );
-  
+  // Load Students and Map Names
+  let q=query(collection(db,"students"), where("madrasaId","==",mid), where("class","==",markClass.value));
   let students = [];
-  (await getDocs(q)).forEach(d => students.push(d.data().reg));
+  const snap = await getDocs(q);
   
-  // Alphanumeric Sort for Dropdown
-  students.sort((a, b) => a.toString().localeCompare(b.toString(), undefined, { numeric: true, sensitivity: 'base' }));
-  
-  students.forEach(r => markReg.innerHTML+=`<option>${r}</option>`);
+  snap.forEach(d => {
+      let data = d.data();
+      students.push(data.reg);
+      studentDataMap[data.reg] = data.name; // Store for lookup
+  });
 
-  // Load Subjects (Sorted by createdAt)
-  q=query(collection(db,"subjects"),
-    where("madrasaId","==",mid),
-    where("class","==",markClass.value)
-  );
-  
+  students.sort((a, b) => a.toString().localeCompare(b.toString(), undefined, { numeric: true, sensitivity: 'base' }));
+  students.forEach(r => markReg.innerHTML+=`<option value="${r}">${r}</option>`);
+
+  // Load Subjects
+  q=query(collection(db,"subjects"), where("madrasaId","==",mid), where("class","==",markClass.value));
   let subs = [];
   (await getDocs(q)).forEach(d => subs.push(d.data()));
-  subs.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0)); // Ensure dropdown order matches add order
-
+  subs.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
   subs.forEach(s=>markSub.innerHTML+=`<option>${s.subject}</option>`);
 
-  markReg.onchange=loadMarks;
+  markReg.onchange = function() {
+      loadMarks();
+      // Show Name
+      if(this.value && studentDataMap[this.value]){
+          markStuName.innerText = "Student: " + studentDataMap[this.value];
+      } else {
+          markStuName.innerText = "";
+      }
+  };
 }
 
 async function loadMarks(){
   markList.innerHTML="";
+  if(!markReg.value) return;
+
   const q=query(collection(db,"marks"),
     where("madrasaId","==",mid),
     where("class","==",markClass.value),
@@ -277,34 +351,42 @@ async function loadMarks(){
   (await getDocs(q)).forEach(d=>{
     markList.innerHTML+=`
       <div class="item">
-        ${d.data().subject} : ${d.data().mark}
-        <button class="danger delete-btn" onclick="del('${d.id}','marks')">Delete</button>
+        ${d.data().subject} : <b>${d.data().mark}</b>
       </div>`;
   });
 }
 
 window.saveMark=async()=>{
   if(!markClass.value || !markReg.value || !markSub.value || !mark.value) return alert("Fill all details");
-  await addDoc(collection(db,"marks"),{
-    madrasaId:mid,
-    class:markClass.value,
-    reg:markReg.value,
-    subject:markSub.value,
-    mark:Number(mark.value)
-  });
+  
+  const q = query(collection(db, "marks"),
+    where("madrasaId", "==", mid),
+    where("class", "==", markClass.value),
+    where("reg", "==", markReg.value),
+    where("subject", "==", markSub.value)
+  );
+
+  const snapshot = await getDocs(q);
+
+  if (!snapshot.empty) {
+      await updateDoc(doc(db, "marks", snapshot.docs[0].id), { mark: Number(mark.value) });
+  } else {
+      await addDoc(collection(db,"marks"),{
+        madrasaId:mid,
+        class:markClass.value,
+        reg:markReg.value,
+        subject:markSub.value,
+        mark:Number(mark.value)
+      });
+  }
   mark.value="";
   loadMarks();
 };
 
-// BULK DELETE MARKS
 window.deleteAllMarks = async () => {
     if(!markClass.value) return alert("Select a class first");
     if(!confirm("DELETE ALL MARKS for Class " + markClass.value + "?")) return;
-
-    const q = query(collection(db, "marks"),
-        where("madrasaId", "==", mid),
-        where("class", "==", markClass.value)
-    );
+    const q = query(collection(db, "marks"), where("madrasaId", "==", mid), where("class", "==", markClass.value));
     const snapshot = await getDocs(q);
     const batch = writeBatch(db);
     snapshot.docs.forEach(doc => batch.delete(doc.ref));
@@ -316,16 +398,29 @@ window.deleteAllMarks = async () => {
 resClass.onchange=loadResultRegs;
 async function loadResultRegs(){
   resReg.innerHTML="<option value=''>Register</option>";
-  const q=query(collection(db,"students"),
-    where("madrasaId","==",mid),
-    where("class","==",resClass.value)
-  );
-  
+  resStuName.innerText = "";
+  studentDataMap = {};
+
+  const q=query(collection(db,"students"), where("madrasaId","==",mid), where("class","==",resClass.value));
   let students = [];
-  (await getDocs(q)).forEach(d => students.push(d.data().reg));
-  students.sort((a, b) => a.toString().localeCompare(b.toString(), undefined, { numeric: true, sensitivity: 'base' }));
+  const snap = await getDocs(q);
   
-  students.forEach(r => resReg.innerHTML+=`<option>${r}</option>`);
+  snap.forEach(d => {
+      let data = d.data();
+      students.push(data.reg);
+      studentDataMap[data.reg] = data.name;
+  });
+
+  students.sort((a, b) => a.toString().localeCompare(b.toString(), undefined, { numeric: true, sensitivity: 'base' }));
+  students.forEach(r => resReg.innerHTML+=`<option value="${r}">${r}</option>`);
+
+  resReg.onchange = function() {
+      if(this.value && studentDataMap[this.value]){
+          resStuName.innerText = "Student: " + studentDataMap[this.value];
+      } else {
+          resStuName.innerText = "";
+      }
+  };
 }
 
 window.saveResult=async()=>{
