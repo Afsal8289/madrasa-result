@@ -7,11 +7,10 @@
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <!-- ✅ FAVICON FIX (404 error ഒഴിവാക്കാൻ) -->
   <link rel="icon" href="data:,">
 
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8490206815383590"
-     crossorigin="anonymous"></script>
+      crossorigin="anonymous"></script>
 
   <style>
     body{
@@ -93,7 +92,6 @@
 <div class="container">
   <div class="card">
 
-    <!-- MADRASA NAME -->
     <h2 id="mname">Madrasa Exam Result</h2>
     <small>Result Search Portal</small>
 
@@ -127,7 +125,6 @@
   </div>
 </div>
 
-<!-- ================= FIREBASE + SCRIPT ================= -->
 <script type="module">
   /* Firebase core */
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
@@ -192,16 +189,44 @@
       "&reg=" + encodeURIComponent(reg);
   }
 
-  /* ADMIN LOGIN */
-  window.adminLogin = function(){
+  /* ✅ ADMIN LOGIN (FIXED: Checks if ID exists) */
+  window.adminLogin = async function(){
     const mid = document.getElementById("mid").value.trim();
+    const btn = document.querySelector(".admin"); // Button select
+
+    // 1. Check if empty
     if(mid === ""){
-      alert("Enter Madrasa ID");
+      alert("Please enter Madrasa ID");
       return;
     }
-    window.location.href = "login.html?mid=" + encodeURIComponent(mid);
+
+    // 2. Change button text to show loading
+    const originalText = btn.innerText;
+    btn.innerText = "Checking...";
+    btn.disabled = true;
+
+    try {
+      // 3. Check Firestore
+      const snap = await getDoc(doc(db, "madrasas", mid));
+
+      if(snap.exists()){
+        // ID Exists -> Go to Login Page
+        window.location.href = "login.html?mid=" + encodeURIComponent(mid);
+      } else {
+        // ID Does Not Exist -> Show Alert
+        alert("Invalid Madrasa ID! (ഈ മദ്രസ ഐഡി നിലവിലില്ല)");
+        btn.innerText = originalText;
+        btn.disabled = false;
+      }
+    } catch(error) {
+      console.error("Error:", error);
+      alert("Network Error! Please check your connection.");
+      btn.innerText = originalText;
+      btn.disabled = false;
+    }
   }
 </script>
+
 <hr style="margin:25px 0;opacity:.3">
 
 <div style="
