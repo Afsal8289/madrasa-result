@@ -45,7 +45,7 @@ button.icon-btn {
   width: 35px !important;
   height: 35px;
   padding: 0;
-  border-radius: 50%; /* Circle shape */
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -66,6 +66,36 @@ button.delete-btn { background: #ffdddd; color: #dc3545; }
   display: block;
 }
 
+/* Grid for Subject Mark Inputs */
+.subject-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 12px;
+  margin-top: 10px;
+  margin-bottom: 15px;
+}
+.subject-box {
+  background: #f8f9fa;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+}
+.subject-box label {
+  font-size: 13px;
+  color: #444;
+  font-weight: bold;
+  display: block;
+  margin-bottom: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.subject-box input {
+  padding: 8px;
+  text-align: center;
+  font-weight: bold;
+}
+
 @media (min-width: 768px){
   .row > *{ flex:1; }
   button{ width:auto; }
@@ -84,7 +114,7 @@ button.delete-btn { background: #ffdddd; color: #dc3545; }
 </div>
 
 <div class="card">
-  <h3>Settings</h3>
+  <h3>Madrasa Name & Passmark</h3>
   <div class="row">
     <input id="mname" placeholder="Madrasa Name">
     <input id="passmark" type="number" placeholder="Pass Mark">
@@ -106,7 +136,7 @@ button.delete-btn { background: #ffdddd; color: #dc3545; }
   <h3>Students</h3>
   <div class="row">
     <select id="stuClass"></select>
-    <input id="reg" type="text" placeholder="Register No">
+    <input id="reg" type="text" placeholder="Register No (e.g., B0506)">
     <input id="sname" placeholder="Student Name">
     
     <button id="addStuBtn" onclick="addStudent()">Add</button> 
@@ -116,16 +146,15 @@ button.delete-btn { background: #ffdddd; color: #dc3545; }
 </div>
 
 <div class="card">
-  <h3>Marks (Auto Update)</h3>
+  <h3>Marks Entry</h3>
   <div class="row">
     <select id="markClass"></select>
     <select id="markReg"></select>
-    <select id="markSub"></select>
-    <input id="mark" type="number" placeholder="Mark">
-    <button onclick="saveMark()">Save / Update</button>
-    <button class="danger del-all-btn" onclick="deleteAllMarks()">Delete All</button>
+    <button class="danger del-all-btn" onclick="deleteAllMarks()">Delete All Marks</button>
   </div>
   <small id="markStuName" class="name-hint"></small> 
+  
+  <div id="markInputsContainer" style="display:none;"></div>
   
   <div class="list" id="markList"></div>
 </div>
@@ -137,8 +166,11 @@ button.delete-btn { background: #ffdddd; color: #dc3545; }
     <select id="resReg"></select>
     <input id="rank" type="number" placeholder="Rank">
     <button onclick="saveResult()">Save / Update</button>
+    <button class="danger del-all-btn" onclick="deleteAllResults()">Delete All</button>
   </div>
   <small id="resStuName" class="name-hint"></small>
+  
+  <div class="list" id="resultList"></div>
 </div>
 
 </div>
@@ -159,7 +191,10 @@ const auth = getAuth(app);
 
 const mid = new URLSearchParams(location.search).get("mid");
 const classes = [1,2,3,4,5,6,7,8,9,10,11,12];
-let studentDataMap = {}; // To store Name vs Reg mapping
+
+let markStudentMap = {}; 
+let resStudentMap = {};  
+let currentMarkSubjects = []; 
 
 function fillSelect(id){
   const s=document.getElementById(id);
@@ -179,15 +214,32 @@ async function loadSettings(){
 }
 loadSettings();
 
-window.saveSettings=()=>updateDoc(doc(db,"madrasas",mid),{
-  name:mname.value,
-  passmark:Number(passmark.value)
-});
+// Added Alert for Settings Save
+window.saveSettings = async () => {
+  if(!mname.value || !passmark.value) return alert("Please fill Madrasa Name and Pass Mark.");
+  await updateDoc(doc(db,"madrasas",mid),{
+    name: mname.value,
+    passmark: Number(passmark.value)
+  });
+  document.getElementById('title').innerText = mname.value;
+  alert("Settings Saved Successfully!");
+};
 
 /* SUBJECTS */
 subClass.onchange=loadSubjects;
+
+function sortSubjects(subjectsArray) {
+    subjectsArray.sort((a, b) => {
+        let timeA = a.createdAt || 0;
+        let timeB = b.createdAt || 0;
+        if(timeA !== timeB) return timeA - timeB; 
+        return a.subject.localeCompare(b.subject); 
+    });
+}
+
 async function loadSubjects(){
   subjectList.innerHTML="";
+  if(!subClass.value) return;
   const q=query(collection(db,"subjects"),
     where("madrasaId","==",mid),
     where("class","==",subClass.value)
@@ -196,7 +248,8 @@ async function loadSubjects(){
   const snap = await getDocs(q);
   let subjects = [];
   snap.forEach(d => subjects.push({ id: d.id, ...d.data() }));
-  subjects.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+  
+  sortSubjects(subjects); 
 
   subjects.forEach(s => {
     subjectList.innerHTML+=`
@@ -240,7 +293,6 @@ async function loadStudents(){
   let students = [];
   snapshot.forEach(d => students.push({ id: d.id, ...d.data() }));
 
-  // Sort Alphanumeric
   students.sort((a, b) => a.reg.toString().localeCompare(b.reg.toString(), undefined, { numeric: true, sensitivity: 'base' }));
 
   students.forEach(s => {
@@ -297,90 +349,149 @@ window.deleteAllStudents = async () => {
     loadStudents();
 };
 
-/* MARKS */
-markClass.onchange=loadMarkSelectors;
+/* MARKS (BATCH ENTRY) */
+markClass.onchange = async () => {
+    markReg.innerHTML="<option value=''>Register</option>";
+    markInputsContainer.innerHTML = "";
+    markInputsContainer.style.display = "none";
+    markList.innerHTML = "";
+    markStuName.innerText = "";
+    markStudentMap = {}; 
+    currentMarkSubjects = [];
 
-async function loadMarkSelectors(){
-  markReg.innerHTML="<option value=''>Register</option>";
-  markSub.innerHTML="<option value=''>Subject</option>";
-  markList.innerHTML="";
-  markStuName.innerText = ""; // Clear name
-  studentDataMap = {}; // Clear map
+    if(!markClass.value) return;
 
-  // Load Students and Map Names
-  let q=query(collection(db,"students"), where("madrasaId","==",mid), where("class","==",markClass.value));
-  let students = [];
-  const snap = await getDocs(q);
-  
-  snap.forEach(d => {
-      let data = d.data();
-      students.push(data.reg);
-      studentDataMap[data.reg] = data.name; // Store for lookup
-  });
+    // Fetch Students
+    let q=query(collection(db,"students"), where("madrasaId","==",mid), where("class","==",markClass.value));
+    let students = [];
+    const snap = await getDocs(q);
+    
+    snap.forEach(d => {
+        let data = d.data();
+        students.push(data.reg);
+        markStudentMap[data.reg] = data.name; 
+    });
 
-  students.sort((a, b) => a.toString().localeCompare(b.toString(), undefined, { numeric: true, sensitivity: 'base' }));
-  students.forEach(r => markReg.innerHTML+=`<option value="${r}">${r}</option>`);
+    students.sort((a, b) => a.toString().localeCompare(b.toString(), undefined, { numeric: true, sensitivity: 'base' }));
+    students.forEach(r => markReg.innerHTML+=`<option value="${r}">${r}</option>`);
 
-  // Load Subjects
-  q=query(collection(db,"subjects"), where("madrasaId","==",mid), where("class","==",markClass.value));
-  let subs = [];
-  (await getDocs(q)).forEach(d => subs.push(d.data()));
-  subs.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-  subs.forEach(s=>markSub.innerHTML+=`<option>${s.subject}</option>`);
+    // Fetch Subjects for the Class
+    q=query(collection(db,"subjects"), where("madrasaId","==",mid), where("class","==",markClass.value));
+    let subs = [];
+    (await getDocs(q)).forEach(d => subs.push({ id: d.id, ...d.data() }));
+    
+    sortSubjects(subs); 
+    
+    currentMarkSubjects = subs; 
+};
 
-  markReg.onchange = function() {
-      loadMarks();
-      // Show Name
-      if(this.value && studentDataMap[this.value]){
-          markStuName.innerText = "Student: " + studentDataMap[this.value];
-      } else {
-          markStuName.innerText = "";
-      }
-  };
+markReg.onchange = function() {
+    if(this.value && markStudentMap[this.value]){
+        markStuName.innerText = "Student: " + markStudentMap[this.value];
+        loadStudentMarksForm();
+    } else {
+        markStuName.innerText = "";
+        markInputsContainer.style.display = "none";
+        markList.innerHTML = "";
+    }
+};
+
+async function loadStudentMarksForm(){
+    if(!markReg.value || !markClass.value) return;
+    
+    markInputsContainer.innerHTML = "<p style='color:#666;font-size:14px;'>Loading subjects...</p>";
+    markInputsContainer.style.display = "block";
+    markList.innerHTML = ""; 
+
+    // Fetch previously saved marks
+    const q=query(collection(db,"marks"),
+        where("madrasaId","==",mid),
+        where("class","==",markClass.value),
+        where("reg","==",markReg.value)
+    );
+    const existingDocs = await getDocs(q);
+    let existingMarks = {};
+    existingDocs.forEach(d => {
+        existingMarks[d.data().subject] = { id: d.id, mark: d.data().mark };
+    });
+
+    if(currentMarkSubjects.length === 0){
+        markInputsContainer.innerHTML = `<p style="color:red; font-size:14px;">No subjects found for this class. Please add subjects first.</p>`;
+        return;
+    }
+
+    let html = `<div class="subject-grid">`;
+    let listHtml = ""; 
+    
+    currentMarkSubjects.forEach(sub => {
+        let markVal = existingMarks[sub.subject] ? existingMarks[sub.subject].mark : '';
+        let docId = existingMarks[sub.subject] ? existingMarks[sub.subject].id : '';
+        
+        // Changed input type to 'text' to allow 'A' or 'Ab'
+        html += `
+        <div class="subject-box">
+            <label title="${sub.subject}">${sub.subject}</label>
+            <input type="text" class="bulk-mark-input" data-sub="${sub.subject}" data-docid="${docId}" value="${markVal}" placeholder="Mark or 'A'">
+        </div>`;
+
+        if(existingMarks[sub.subject]) {
+            listHtml += `
+            <div class="item">
+                ${sub.subject} : <b>${existingMarks[sub.subject].mark}</b>
+            </div>`;
+        }
+    });
+    
+    html += `</div>`;
+    html += `<button onclick="saveAllMarks()">Save All Marks</button>`;
+    
+    markInputsContainer.innerHTML = html;
+    
+    if(listHtml) {
+        markList.innerHTML = `<h4 style="margin-bottom:10px; color:#444;">Saved Marks</h4>` + listHtml;
+    }
 }
 
-async function loadMarks(){
-  markList.innerHTML="";
-  if(!markReg.value) return;
+window.saveAllMarks = async () => {
+    const inputs = document.querySelectorAll('.bulk-mark-input');
+    const batch = writeBatch(db);
+    let hasChanges = false;
 
-  const q=query(collection(db,"marks"),
-    where("madrasaId","==",mid),
-    where("class","==",markClass.value),
-    where("reg","==",markReg.value)
-  );
-  (await getDocs(q)).forEach(d=>{
-    markList.innerHTML+=`
-      <div class="item">
-        ${d.data().subject} : <b>${d.data().mark}</b>
-      </div>`;
-  });
-}
+    inputs.forEach(input => {
+        let sub = input.getAttribute('data-sub');
+        let docId = input.getAttribute('data-docid');
+        let val = input.value.trim();
 
-window.saveMark=async()=>{
-  if(!markClass.value || !markReg.value || !markSub.value || !mark.value) return alert("Fill all details");
-  
-  const q = query(collection(db, "marks"),
-    where("madrasaId", "==", mid),
-    where("class", "==", markClass.value),
-    where("reg", "==", markReg.value),
-    where("subject", "==", markSub.value)
-  );
+        if (val !== "") {
+            // Check if it's a number. If not, save as text (like 'A')
+            let markToSave = isNaN(val) ? val.toUpperCase() : Number(val);
+            
+            if (docId) {
+                // UPDATE
+                const ref = doc(db, "marks", docId);
+                batch.update(ref, { mark: markToSave });
+            } else {
+                // ADD
+                const ref = doc(collection(db, "marks"));
+                batch.set(ref, {
+                    madrasaId: mid,
+                    class: markClass.value,
+                    reg: markReg.value,
+                    subject: sub,
+                    mark: markToSave
+                });
+            }
+            hasChanges = true;
+        } else if (val === "" && docId) {
+            // DELETE
+            const ref = doc(db, "marks", docId);
+            batch.delete(ref);
+            hasChanges = true;
+        }
+    });
 
-  const snapshot = await getDocs(q);
-
-  if (!snapshot.empty) {
-      await updateDoc(doc(db, "marks", snapshot.docs[0].id), { mark: Number(mark.value) });
-  } else {
-      await addDoc(collection(db,"marks"),{
-        madrasaId:mid,
-        class:markClass.value,
-        reg:markReg.value,
-        subject:markSub.value,
-        mark:Number(mark.value)
-      });
-  }
-  mark.value="";
-  loadMarks();
+    await batch.commit();
+    loadStudentMarksForm(); 
 };
 
 window.deleteAllMarks = async () => {
@@ -391,40 +502,73 @@ window.deleteAllMarks = async () => {
     const batch = writeBatch(db);
     snapshot.docs.forEach(doc => batch.delete(doc.ref));
     await batch.commit();
-    loadMarks(); 
+    
+    markInputsContainer.style.display = "none";
+    markList.innerHTML = "";
+    markReg.value = "";
+    markStuName.innerText = "";
+    alert("All Marks Deleted.");
 };
 
 /* RESULT / RANK */
-resClass.onchange=loadResultRegs;
-async function loadResultRegs(){
-  resReg.innerHTML="<option value=''>Register</option>";
-  resStuName.innerText = "";
-  studentDataMap = {};
+resClass.onchange = async () => {
+    resReg.innerHTML="<option value=''>Register</option>";
+    resultList.innerHTML = "";
+    resStuName.innerText = "";
+    resStudentMap = {};
 
-  const q=query(collection(db,"students"), where("madrasaId","==",mid), where("class","==",resClass.value));
-  let students = [];
-  const snap = await getDocs(q);
-  
-  snap.forEach(d => {
-      let data = d.data();
-      students.push(data.reg);
-      studentDataMap[data.reg] = data.name;
-  });
+    if(!resClass.value) return;
 
-  students.sort((a, b) => a.toString().localeCompare(b.toString(), undefined, { numeric: true, sensitivity: 'base' }));
-  students.forEach(r => resReg.innerHTML+=`<option value="${r}">${r}</option>`);
+    const q=query(collection(db,"students"), where("madrasaId","==",mid), where("class","==",resClass.value));
+    const snap = await getDocs(q);
+    let students = [];
+    
+    snap.forEach(d => {
+        let data = d.data();
+        students.push(data.reg);
+        resStudentMap[data.reg] = data.name;
+    });
 
-  resReg.onchange = function() {
-      if(this.value && studentDataMap[this.value]){
-          resStuName.innerText = "Student: " + studentDataMap[this.value];
-      } else {
-          resStuName.innerText = "";
-      }
-  };
+    students.sort((a, b) => a.toString().localeCompare(b.toString(), undefined, { numeric: true, sensitivity: 'base' }));
+    students.forEach(r => resReg.innerHTML+=`<option value="${r}">${r}</option>`);
+};
+
+resReg.onchange = function() {
+    if(this.value && resStudentMap[this.value]){
+        resStuName.innerText = "Student: " + resStudentMap[this.value];
+        loadSavedResult(); 
+    } else {
+        resStuName.innerText = "";
+        resultList.innerHTML = "";
+    }
+};
+
+async function loadSavedResult(){
+    resultList.innerHTML = "";
+    if(!resReg.value) return;
+
+    const q = query(collection(db, "results"),
+        where("madrasaId", "==", mid),
+        where("class", "==", resClass.value),
+        where("reg", "==", resReg.value)
+    );
+    
+    const snap = await getDocs(q);
+    snap.forEach(d => {
+        let data = d.data();
+        let color = data.result === "PASSED" ? "green" : "red";
+        resultList.innerHTML += `
+        <div class="item">
+            <span>Rank: <b>${data.rank}</b> | Total: ${data.total} | <strong style="color:${color}">${data.result}</strong></span>
+            <button class="icon-btn delete-btn" onclick="del('${d.id}','results')"><i class="fas fa-trash"></i></button>
+        </div>`;
+    });
 }
 
 window.saveResult=async()=>{
-  let total=0,fail=false;
+  if(!resClass.value || !resReg.value || !rank.value) return alert("Select Student and Enter Rank");
+  
+  let total=0, fail=false;
   const pm=Number(passmark.value);
 
   let q=query(collection(db,"marks"),
@@ -432,9 +576,17 @@ window.saveResult=async()=>{
     where("class","==",resClass.value),
     where("reg","==",resReg.value)
   );
+  
   (await getDocs(q)).forEach(d=>{
-    total+=d.data().mark;
-    if(d.data().mark<pm) fail=true;
+    let m = d.data().mark;
+    // Check if the mark is a number
+    if(typeof m === 'number') {
+        total += m;
+        if(m < pm) fail = true;
+    } else {
+        // If it's text (like 'A' for absent), they fail automatically
+        fail = true;
+    }
   });
 
   q=query(collection(db,"results"),
@@ -459,7 +611,21 @@ window.saveResult=async()=>{
       rank:Number(rank.value)
     });
   }
-  alert("Result saved");
+  
+  rank.value = ""; 
+  loadSavedResult(); 
+};
+
+window.deleteAllResults = async () => {
+    if(!resClass.value) return alert("Select a class first");
+    if(!confirm("DELETE ALL RESULTS/RANKS for Class " + resClass.value + "?")) return;
+    const q = query(collection(db, "results"), where("madrasaId", "==", mid), where("class", "==", resClass.value));
+    const snapshot = await getDocs(q);
+    const batch = writeBatch(db);
+    snapshot.docs.forEach(doc => batch.delete(doc.ref));
+    await batch.commit();
+    resultList.innerHTML = "";
+    alert("All Results/Ranks deleted.");
 };
 
 window.del=async(id,col)=>{
@@ -467,7 +633,7 @@ window.del=async(id,col)=>{
     await deleteDoc(doc(db,col,id));
     if(col === 'subjects') loadSubjects();
     if(col === 'students') loadStudents();
-    if(col === 'marks') loadMarks();
+    if(col === 'results') loadSavedResult();
   }
 };
 
