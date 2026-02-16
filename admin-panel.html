@@ -66,7 +66,7 @@ button.delete-btn { background: #ffdddd; color: #dc3545; }
   display: block;
 }
 
-/* Grid for Subject Mark Inputs */
+/* Grid for Subject/Attendance Inputs */
 .subject-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
@@ -155,8 +155,16 @@ button.delete-btn { background: #ffdddd; color: #dc3545; }
   <small id="markStuName" class="name-hint"></small> 
   
   <div id="markInputsContainer" style="display:none;"></div>
-  
   <div class="list" id="markList"></div>
+</div>
+
+<div class="card">
+  <h3>Attendance (Optional)</h3>
+  <div class="row">
+    <select id="attClass"></select>
+    <button class="danger del-all-btn" onclick="deleteAllAttendance()">Delete All Attendance</button>
+  </div>
+  <div id="attInputsContainer" style="display:none;"></div>
 </div>
 
 <div class="card">
@@ -201,7 +209,8 @@ function fillSelect(id){
   s.innerHTML="<option value=''>Select Class</option>";
   classes.forEach(c=>s.innerHTML+=`<option value="${c}">${c}</option>`);
 }
-["subClass","stuClass","markClass","resClass"].forEach(fillSelect);
+// Added attClass to the dropdowns list
+["subClass","stuClass","markClass","attClass","resClass"].forEach(fillSelect);
 
 /* SETTINGS */
 async function loadSettings(){
@@ -214,7 +223,6 @@ async function loadSettings(){
 }
 loadSettings();
 
-// Added Alert for Settings Save
 window.saveSettings = async () => {
   if(!mname.value || !passmark.value) return alert("Please fill Madrasa Name and Pass Mark.");
   await updateDoc(doc(db,"madrasas",mid),{
@@ -361,7 +369,6 @@ markClass.onchange = async () => {
 
     if(!markClass.value) return;
 
-    // Fetch Students
     let q=query(collection(db,"students"), where("madrasaId","==",mid), where("class","==",markClass.value));
     let students = [];
     const snap = await getDocs(q);
@@ -375,7 +382,6 @@ markClass.onchange = async () => {
     students.sort((a, b) => a.toString().localeCompare(b.toString(), undefined, { numeric: true, sensitivity: 'base' }));
     students.forEach(r => markReg.innerHTML+=`<option value="${r}">${r}</option>`);
 
-    // Fetch Subjects for the Class
     q=query(collection(db,"subjects"), where("madrasaId","==",mid), where("class","==",markClass.value));
     let subs = [];
     (await getDocs(q)).forEach(d => subs.push({ id: d.id, ...d.data() }));
@@ -403,7 +409,6 @@ async function loadStudentMarksForm(){
     markInputsContainer.style.display = "block";
     markList.innerHTML = ""; 
 
-    // Fetch previously saved marks
     const q=query(collection(db,"marks"),
         where("madrasaId","==",mid),
         where("class","==",markClass.value),
@@ -416,7 +421,7 @@ async function loadStudentMarksForm(){
     });
 
     if(currentMarkSubjects.length === 0){
-        markInputsContainer.innerHTML = `<p style="color:red; font-size:14px;">No subjects found for this class. Please add subjects first.</p>`;
+        markInputsContainer.innerHTML = `<p style="color:red; font-size:14px;">No subjects found for this class.</p>`;
         return;
     }
 
@@ -427,7 +432,6 @@ async function loadStudentMarksForm(){
         let markVal = existingMarks[sub.subject] ? existingMarks[sub.subject].mark : '';
         let docId = existingMarks[sub.subject] ? existingMarks[sub.subject].id : '';
         
-        // Changed input type to 'text' to allow 'A' or 'Ab'
         html += `
         <div class="subject-box">
             <label title="${sub.subject}">${sub.subject}</label>
@@ -455,38 +459,23 @@ async function loadStudentMarksForm(){
 window.saveAllMarks = async () => {
     const inputs = document.querySelectorAll('.bulk-mark-input');
     const batch = writeBatch(db);
-    let hasChanges = false;
-
+    
     inputs.forEach(input => {
         let sub = input.getAttribute('data-sub');
         let docId = input.getAttribute('data-docid');
         let val = input.value.trim();
 
         if (val !== "") {
-            // Check if it's a number. If not, save as text (like 'A')
             let markToSave = isNaN(val) ? val.toUpperCase() : Number(val);
-            
             if (docId) {
-                // UPDATE
-                const ref = doc(db, "marks", docId);
-                batch.update(ref, { mark: markToSave });
+                batch.update(doc(db, "marks", docId), { mark: markToSave });
             } else {
-                // ADD
-                const ref = doc(collection(db, "marks"));
-                batch.set(ref, {
-                    madrasaId: mid,
-                    class: markClass.value,
-                    reg: markReg.value,
-                    subject: sub,
-                    mark: markToSave
+                batch.set(doc(collection(db, "marks")), {
+                    madrasaId: mid, class: markClass.value, reg: markReg.value, subject: sub, mark: markToSave
                 });
             }
-            hasChanges = true;
         } else if (val === "" && docId) {
-            // DELETE
-            const ref = doc(db, "marks", docId);
-            batch.delete(ref);
-            hasChanges = true;
+            batch.delete(doc(db, "marks", docId));
         }
     });
 
@@ -509,6 +498,95 @@ window.deleteAllMarks = async () => {
     markStuName.innerText = "";
     alert("All Marks Deleted.");
 };
+
+
+/* ATTENDANCE SECTION */
+attClass.onchange = async () => {
+    attInputsContainer.innerHTML = "<p style='color:#666;font-size:14px;'>Loading students...</p>";
+    attInputsContainer.style.display = "block";
+
+    if(!attClass.value) {
+        attInputsContainer.style.display = "none";
+        return;
+    }
+
+    // Fetch students for the class
+    let q = query(collection(db,"students"), where("madrasaId","==",mid), where("class","==",attClass.value));
+    const snap = await getDocs(q);
+    let students = [];
+    snap.forEach(d => students.push(d.data()));
+    students.sort((a, b) => a.reg.toString().localeCompare(b.reg.toString(), undefined, { numeric: true, sensitivity: 'base' }));
+
+    if(students.length === 0){
+        attInputsContainer.innerHTML = `<p style="color:red; font-size:14px;">No students found for this class.</p>`;
+        return;
+    }
+
+    // Fetch previously saved attendance
+    const attQ = query(collection(db,"attendance"), where("madrasaId","==",mid), where("class","==",attClass.value));
+    const existingDocs = await getDocs(attQ);
+    let existingAtt = {};
+    existingDocs.forEach(d => {
+        existingAtt[d.data().reg] = { id: d.id, val: d.data().attendance };
+    });
+
+    let html = `<div class="subject-grid">`;
+    students.forEach(s => {
+        let attVal = existingAtt[s.reg] ? existingAtt[s.reg].val : '';
+        let docId = existingAtt[s.reg] ? existingAtt[s.reg].id : '';
+        
+        html += `
+        <div class="subject-box">
+            <label title="${s.name}">${s.reg} - ${s.name}</label>
+            <input type="text" class="bulk-att-input" data-reg="${s.reg}" data-docid="${docId}" value="${attVal}" placeholder="e.g. 150 or 85%">
+        </div>`;
+    });
+    
+    html += `</div>`;
+    html += `<button onclick="saveAllAttendance()">Save Attendance</button>`;
+    
+    attInputsContainer.innerHTML = html;
+};
+
+window.saveAllAttendance = async () => {
+    const inputs = document.querySelectorAll('.bulk-att-input');
+    const batch = writeBatch(db);
+
+    inputs.forEach(input => {
+        let regNo = input.getAttribute('data-reg');
+        let docId = input.getAttribute('data-docid');
+        let val = input.value.trim();
+
+        if (val !== "") {
+            if (docId) {
+                batch.update(doc(db, "attendance", docId), { attendance: val });
+            } else {
+                batch.set(doc(collection(db, "attendance")), {
+                    madrasaId: mid, class: attClass.value, reg: regNo, attendance: val
+                });
+            }
+        } else if (val === "" && docId) {
+            batch.delete(doc(db, "attendance", docId));
+        }
+    });
+
+    await batch.commit();
+    alert("Attendance Saved!");
+    attClass.dispatchEvent(new Event('change')); // Reload the UI
+};
+
+window.deleteAllAttendance = async () => {
+    if(!attClass.value) return alert("Select a class first");
+    if(!confirm("DELETE ALL ATTENDANCE for Class " + attClass.value + "?")) return;
+    const q = query(collection(db, "attendance"), where("madrasaId", "==", mid), where("class", "==", attClass.value));
+    const snapshot = await getDocs(q);
+    const batch = writeBatch(db);
+    snapshot.docs.forEach(doc => batch.delete(doc.ref));
+    await batch.commit();
+    attClass.dispatchEvent(new Event('change'));
+    alert("All Attendance Deleted.");
+};
+
 
 /* RESULT / RANK */
 resClass.onchange = async () => {
@@ -547,19 +625,32 @@ async function loadSavedResult(){
     resultList.innerHTML = "";
     if(!resReg.value) return;
 
+    // Fetch Rank/Result
     const q = query(collection(db, "results"),
         where("madrasaId", "==", mid),
         where("class", "==", resClass.value),
         where("reg", "==", resReg.value)
     );
-    
     const snap = await getDocs(q);
+
+    // Fetch Attendance
+    let attText = "";
+    const attQ = query(collection(db, "attendance"),
+        where("madrasaId", "==", mid),
+        where("class", "==", resClass.value),
+        where("reg", "==", resReg.value)
+    );
+    const attSnap = await getDocs(attQ);
+    if (!attSnap.empty) {
+        attText = ` | Att: <b>${attSnap.docs[0].data().attendance}</b>`;
+    }
+
     snap.forEach(d => {
         let data = d.data();
         let color = data.result === "PASSED" ? "green" : "red";
         resultList.innerHTML += `
         <div class="item">
-            <span>Rank: <b>${data.rank}</b> | Total: ${data.total} | <strong style="color:${color}">${data.result}</strong></span>
+            <span>Rank: <b>${data.rank}</b> | Total: ${data.total}${attText} | <strong style="color:${color}">${data.result}</strong></span>
             <button class="icon-btn delete-btn" onclick="del('${d.id}','results')"><i class="fas fa-trash"></i></button>
         </div>`;
     });
@@ -579,12 +670,10 @@ window.saveResult=async()=>{
   
   (await getDocs(q)).forEach(d=>{
     let m = d.data().mark;
-    // Check if the mark is a number
     if(typeof m === 'number') {
         total += m;
         if(m < pm) fail = true;
     } else {
-        // If it's text (like 'A' for absent), they fail automatically
         fail = true;
     }
   });
