@@ -187,6 +187,131 @@ async function loadResult(){
   const marksTbody = document.getElementById("marks");
   marksTbody.innerHTML = "";
 
+  // ആവർത്തിച്ചു വരുന്ന വിഷയങ്ങൾ ഒഴിവാക്കാനുള്ള പുതിയ വഴി
+  const uniqueMarks = {};
+
+  markSnap.forEach(d => {
+    const m = d.data();
+    uniqueMarks[m.subject] = m.mark; 
+  });
+
+  for (const [subject, mark] of Object.entries(uniqueMarks)) {
+    marksTbody.innerHTML += `
+    <tr>
+      <td>${subject}</td>
+      <td>${mark}</td>
+    </tr>
+    `;
+    
+    if(typeof mark === 'number' || (!isNaN(mark) && mark.toString().trim() !== "")) {
+        let markVal = Number(mark);
+        total += markVal;
+        if(markVal < mad.passmark) {
+            status = "FAILED";
+        }
+    } else {
+        status = "FAILED"; 
+    }
+  }
+
+  document.getElementById("total").innerText = total;
+  
+  const statusEl = document.getElementById("status");
+  statusEl.innerText = status;
+  statusEl.className = status === "PASSED" ? "status-pass" : "status-fail";
+}
+
+loadResult();
+
+function downloadPDF(){
+  html2pdf().from(document.getElementById("resultCard")).save();
+}
+</script>
+
+</body>
+</html>
+  <button class="download" onclick="downloadPDF()">Download PDF</button>
+  <button class="back" onclick="history.back()">Back</button>
+</div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+<script>
+firebase.initializeApp({
+  apiKey: "AIzaSyAYqP10IiFNHEgOEn3ptlIUcj_wLY7XKZs",
+  authDomain: "madrasa-result-system-1698b.firebaseapp.com",
+  projectId: "madrasa-result-system-1698b"
+});
+
+const db = firebase.firestore();
+
+const params = new URLSearchParams(location.search);
+const mid = params.get("mid");
+const cls = params.get("class");
+const reg = params.get("reg");
+
+async function loadResult(){
+
+  const madSnap = await db.collection("madrasas").doc(mid).get();
+  if(!madSnap.exists){
+    alert("Invalid Madrasa ID");
+    return;
+  }
+  const mad = madSnap.data();
+  madName.innerText = mad.name;
+
+  const stuSnap = await db.collection("students")
+    .where("madrasaId","==",mid)
+    .where("class","==",cls)
+    .where("reg","==",reg)
+    .get();
+
+  if(stuSnap.empty){
+    alert("Result not found");
+    history.back();
+    return;
+  }
+
+  const stu = stuSnap.docs[0].data();
+  sName.innerText = stu.name;
+  sReg.innerText = reg;
+  sClass.innerText = cls;
+
+  // Fetch Rank
+  const resSnap = await db.collection("results")
+    .where("madrasaId","==",mid)
+    .where("class","==",cls)
+    .where("reg","==",reg)
+    .get();
+
+  sRank.innerText = resSnap.empty ? "-" : resSnap.docs[0].data().rank;
+
+  // Fetch Attendance
+  const attSnap = await db.collection("attendance")
+    .where("madrasaId","==",mid)
+    .where("class","==",cls)
+    .where("reg","==",reg)
+    .get();
+
+  if(!attSnap.empty){
+      document.getElementById("attBox").style.display = "block";
+      document.getElementById("attendance").innerText = attSnap.docs[0].data().attendance;
+  }
+
+  // Fetch Marks
+  const markSnap = await db.collection("marks")
+    .where("madrasaId","==",mid)
+    .where("class","==",cls)
+    .where("reg","==",reg)
+    .get();
+
+  let total = 0;
+  let status = "PASSED";
+  const marksTbody = document.getElementById("marks");
+  marksTbody.innerHTML = "";
+
   markSnap.forEach(d=>{
     const m = d.data();
     marksTbody.innerHTML += `
@@ -223,4 +348,5 @@ function downloadPDF(){
 </script>
 
 </body>
+
 </html>
