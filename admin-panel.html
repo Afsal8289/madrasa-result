@@ -453,7 +453,6 @@ async function loadStudentMarksForm(){
     }
 }
 
-// FIXED DUAL-SAVING BUG HERE (Using Custom ID + Merge)
 window.saveAllMarks = async () => {
     const inputs = document.querySelectorAll('.bulk-mark-input');
     const batch = writeBatch(db);
@@ -540,7 +539,6 @@ attClass.onchange = async () => {
     attInputsContainer.innerHTML = html;
 };
 
-// FIXED DUAL-SAVING BUG HERE (Using Custom ID + Merge)
 window.saveAllAttendance = async () => {
     const inputs = document.querySelectorAll('.bulk-att-input');
     const batch = writeBatch(db);
@@ -577,7 +575,7 @@ window.deleteAllAttendance = async () => {
     alert("All Attendance Deleted.");
 };
 
-/* RESULT / RANK */
+/* RESULT / RANK SECTION (UPDATED) */
 resClass.onchange = async () => {
     resReg.innerHTML="<option value=''>Register</option>";
     resultList.innerHTML = "";
@@ -597,19 +595,70 @@ resClass.onchange = async () => {
 
     students.sort((a, b) => a.toString().localeCompare(b.toString(), undefined, { numeric: true, sensitivity: 'base' }));
     students.forEach(r => resReg.innerHTML+=`<option value="${r}">${r}</option>`);
-
-    loadResults();
 };
 
 resReg.onchange = () => {
     if(resReg.value && resStudentMap[resReg.value]){
         resStuName.innerText = "Student: " + resStudentMap[resReg.value];
+        loadSingleResult(); 
     } else {
         resStuName.innerText = "";
+        resultList.innerHTML = "";
     }
 };
 
-// FIXED DUAL-SAVING BUG HERE (Using Custom ID + Merge)
+async function loadSingleResult() {
+    if(!resClass.value || !resReg.value) return;
+    resultList.innerHTML = "<p style='color:#666;font-size:14px;'>Loading...</p>";
+    
+    let pm = Number(document.getElementById('passmark').value) || 0;
+
+    const qMarks = query(collection(db,"marks"), where("madrasaId","==",mid), where("class","==",resClass.value), where("reg","==",resReg.value));
+    const snapMarks = await getDocs(qMarks);
+    
+    let total = 0;
+    let status = "PASSED";
+    let hasMarks = false;
+
+    snapMarks.forEach(d => {
+        hasMarks = true;
+        let m = d.data().mark;
+        if(typeof m === 'number' || (!isNaN(m) && m.toString().trim() !== "")) {
+            let markVal = Number(m);
+            total += markVal;
+            if(markVal < pm) status = "FAILED";
+        } else {
+            status = "FAILED";
+        }
+    });
+
+    const customDocId = `${mid}_${resClass.value}_${resReg.value}`;
+    const docRef = doc(db, "results", customDocId);
+    const docSnap = await getDoc(docRef);
+    let currentRank = docSnap.exists() ? docSnap.data().rank : "Not Assigned";
+    
+    let statusColor = status === "PASSED" ? "green" : "red";
+
+    if(!hasMarks) {
+        resultList.innerHTML = `
+        <div class="item" style="flex-direction:column; align-items:flex-start;">
+            <p style="color:red; margin:0;">No marks found for this student.</p>
+            ${docSnap.exists() ? `<div style="margin-top:10px; width:100%; display:flex; justify-content:space-between;"><b>Current Rank:</b> ${currentRank} <button class="icon-btn delete-btn" onclick="del('${docSnap.id}','results')"><i class="fas fa-trash"></i></button></div>` : ''}
+        </div>`;
+        return;
+    }
+
+    resultList.innerHTML = `
+    <div class="item" style="flex-direction:column; align-items:flex-start; gap:8px;">
+        <div style="width:100%; display:flex; justify-content:space-between;"><span><b>Total Marks:</b> ${total}</span></div>
+        <div style="width:100%; display:flex; justify-content:space-between;"><span><b>Status:</b> <span style="color:${statusColor}; font-weight:bold;">${status}</span></span></div>
+        <div style="width:100%; display:flex; justify-content:space-between; align-items:center;">
+            <span><b>Current Rank:</b> ${currentRank}</span>
+            ${docSnap.exists() ? `<button class="icon-btn delete-btn" onclick="del('${docSnap.id}','results')"><i class="fas fa-trash"></i></button>` : ''}
+        </div>
+    </div>`;
+}
+
 window.saveResult = async () => {
     if(!resClass.value || !resReg.value || !rank.value) return alert("Fill all fields");
     
@@ -622,27 +671,8 @@ window.saveResult = async () => {
 
     alert("Rank Saved/Updated Successfully!");
     rank.value = "";
-    loadResults();
+    loadSingleResult();
 };
-
-async function loadResults() {
-    resultList.innerHTML = "";
-    if(!resClass.value) return;
-
-    const q = query(collection(db,"results"), where("madrasaId","==",mid), where("class","==",resClass.value));
-    const snap = await getDocs(q);
-    
-    let results = [];
-    snap.forEach(d => results.push({ id: d.id, ...d.data() }));
-
-    results.forEach(d => {
-        resultList.innerHTML += `
-        <div class="item">
-            ${d.reg} - Rank: <b>${d.rank}</b>
-            <button class="icon-btn delete-btn" onclick="del('${d.id}','results')"><i class="fas fa-trash"></i></button>
-        </div>`;
-    });
-}
 
 window.deleteAllResults = async () => {
     if(!resClass.value) return alert("Select a class first");
@@ -652,7 +682,7 @@ window.deleteAllResults = async () => {
     const batch = writeBatch(db);
     snapshot.docs.forEach(doc => batch.delete(doc.ref));
     await batch.commit();
-    loadResults();
+    resultList.innerHTML = "";
     alert("All Ranks Deleted.");
 };
 
@@ -662,7 +692,10 @@ window.del = async (id, col) => {
     await deleteDoc(doc(db, col, id));
     if(col === 'subjects') loadSubjects();
     if(col === 'students') loadStudents();
-    if(col === 'results') loadResults();
+    if(col === 'results') {
+        if(resReg.value) loadSingleResult();
+        else resultList.innerHTML = "";
+    }
 };
 
 /* LOGOUT */
