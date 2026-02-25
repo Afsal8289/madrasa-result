@@ -495,7 +495,6 @@ window.deleteAllMarks = async () => {
     alert("All Marks Deleted.");
 };
 
-
 /* ATTENDANCE SECTION */
 attClass.onchange = async () => {
     attInputsContainer.innerHTML = "<p style='color:#666;font-size:14px;'>Loading students...</p>";
@@ -578,7 +577,6 @@ window.deleteAllAttendance = async () => {
     alert("All Attendance Deleted.");
 };
 
-
 /* RESULT / RANK */
 resClass.onchange = async () => {
     resReg.innerHTML="<option value=''>Register</option>";
@@ -622,4 +620,60 @@ window.saveResult = async () => {
         madrasaId: mid, class: resClass.value, reg: resReg.value, rank: rank.value
     }, { merge: true });
 
-    alert
+    alert("Rank Saved/Updated Successfully!");
+    rank.value = "";
+    loadResults();
+};
+
+async function loadResults() {
+    resultList.innerHTML = "";
+    if(!resClass.value) return;
+
+    const q = query(collection(db,"results"), where("madrasaId","==",mid), where("class","==",resClass.value));
+    const snap = await getDocs(q);
+    
+    let results = [];
+    snap.forEach(d => results.push({ id: d.id, ...d.data() }));
+
+    results.forEach(d => {
+        resultList.innerHTML += `
+        <div class="item">
+            ${d.reg} - Rank: <b>${d.rank}</b>
+            <button class="icon-btn delete-btn" onclick="del('${d.id}','results')"><i class="fas fa-trash"></i></button>
+        </div>`;
+    });
+}
+
+window.deleteAllResults = async () => {
+    if(!resClass.value) return alert("Select a class first");
+    if(!confirm("DELETE ALL RANKS for Class " + resClass.value + "?")) return;
+    const q = query(collection(db, "results"), where("madrasaId", "==", mid), where("class", "==", resClass.value));
+    const snapshot = await getDocs(q);
+    const batch = writeBatch(db);
+    snapshot.docs.forEach(doc => batch.delete(doc.ref));
+    await batch.commit();
+    loadResults();
+    alert("All Ranks Deleted.");
+};
+
+/* GLOBAL DELETE FUNCTION */
+window.del = async (id, col) => {
+    if(!confirm("Are you sure you want to delete this?")) return;
+    await deleteDoc(doc(db, col, id));
+    if(col === 'subjects') loadSubjects();
+    if(col === 'students') loadStudents();
+    if(col === 'results') loadResults();
+};
+
+/* LOGOUT */
+window.logout = () => {
+    signOut(auth).then(() => {
+        window.location.href = "index.html"; 
+    }).catch((error) => {
+        console.error("Logout Error:", error);
+    });
+};
+
+</script>
+</body>
+</html>
