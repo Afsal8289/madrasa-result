@@ -613,6 +613,7 @@ async function loadSingleResult() {
     
     let pm = Number(document.getElementById('passmark').value) || 0;
 
+    // Fetch marks for total and status
     const qMarks = query(collection(db,"marks"), where("madrasaId","==",mid), where("class","==",resClass.value), where("reg","==",resReg.value));
     const snapMarks = await getDocs(qMarks);
     
@@ -632,10 +633,17 @@ async function loadSingleResult() {
         }
     });
 
-    const customDocId = `${mid}_${resClass.value}_${resReg.value}`;
-    const docRef = doc(db, "results", customDocId);
-    const docSnap = await getDoc(docRef);
-    let currentRank = docSnap.exists() ? docSnap.data().rank : "Not Assigned";
+    // Fetch rank (Updated to catch both old and new IDs)
+    const qRank = query(collection(db,"results"), where("madrasaId","==",mid), where("class","==",resClass.value), where("reg","==",resReg.value));
+    const snapRank = await getDocs(qRank);
+    
+    let currentRank = "Not Assigned";
+    let rankDocId = null;
+
+    if(!snapRank.empty) {
+        currentRank = snapRank.docs[0].data().rank;
+        rankDocId = snapRank.docs[0].id;
+    }
     
     let statusColor = status === "PASSED" ? "green" : "red";
 
@@ -643,7 +651,7 @@ async function loadSingleResult() {
         resultList.innerHTML = `
         <div class="item" style="flex-direction:column; align-items:flex-start;">
             <p style="color:red; margin:0;">No marks found for this student.</p>
-            ${docSnap.exists() ? `<div style="margin-top:10px; width:100%; display:flex; justify-content:space-between;"><b>Current Rank:</b> ${currentRank} <button class="icon-btn delete-btn" onclick="del('${docSnap.id}','results')"><i class="fas fa-trash"></i></button></div>` : ''}
+            ${rankDocId ? `<div style="margin-top:10px; width:100%; display:flex; justify-content:space-between;"><b>Current Rank:</b> ${currentRank} <button class="icon-btn delete-btn" onclick="del('${rankDocId}','results')"><i class="fas fa-trash"></i></button></div>` : ''}
         </div>`;
         return;
     }
@@ -654,7 +662,7 @@ async function loadSingleResult() {
         <div style="width:100%; display:flex; justify-content:space-between;"><span><b>Status:</b> <span style="color:${statusColor}; font-weight:bold;">${status}</span></span></div>
         <div style="width:100%; display:flex; justify-content:space-between; align-items:center;">
             <span><b>Current Rank:</b> ${currentRank}</span>
-            ${docSnap.exists() ? `<button class="icon-btn delete-btn" onclick="del('${docSnap.id}','results')"><i class="fas fa-trash"></i></button>` : ''}
+            ${rankDocId ? `<button class="icon-btn delete-btn" onclick="del('${rankDocId}','results')"><i class="fas fa-trash"></i></button>` : ''}
         </div>
     </div>`;
 }
@@ -665,6 +673,7 @@ window.saveResult = async () => {
     let customDocId = `${mid}_${resClass.value}_${resReg.value}`;
     let docRef = doc(db, "results", customDocId);
 
+    // Save or update using the new custom ID method
     await setDoc(docRef, {
         madrasaId: mid, class: resClass.value, reg: resReg.value, rank: rank.value
     }, { merge: true });
