@@ -114,6 +114,7 @@ button{
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
 <script>
+// നിങ്ങളുടെ പഴയ API വിവരങ്ങൾ തന്നെ ഇവിടെ നൽകിയിട്ടുണ്ട്
 firebase.initializeApp({
   apiKey: "AIzaSyAYqP10IiFNHEgOEn3ptlIUcj_wLY7XKZs",
   authDomain: "madrasa-result-system-1698b.firebaseapp.com",
@@ -123,11 +124,16 @@ firebase.initializeApp({
 const db = firebase.firestore();
 
 const params = new URLSearchParams(location.search);
-const mid = params.get("mid");
-const cls = params.get("class");
-const reg = params.get("reg");
+// ചെറിയൊരു മാറ്റം: സ്പേസ് വന്നാൽ എറർ വരാതിരിക്കാൻ trim() നൽകി
+const mid = params.get("mid") ? params.get("mid").trim() : null;
+const cls = params.get("class") ? params.get("class").trim() : null;
+const reg = params.get("reg") ? params.get("reg").trim() : null;
 
 async function loadResult(){
+  if(!mid || !cls || !reg) {
+      alert("Invalid Link Parameters");
+      return;
+  }
 
   const madSnap = await db.collection("madrasas").doc(mid).get();
   if(!madSnap.exists){
@@ -135,7 +141,7 @@ async function loadResult(){
     return;
   }
   const mad = madSnap.data();
-  madName.innerText = mad.name;
+  document.getElementById("madName").innerText = mad.name;
 
   const stuSnap = await db.collection("students")
     .where("madrasaId","==",mid)
@@ -144,15 +150,15 @@ async function loadResult(){
     .get();
 
   if(stuSnap.empty){
-    alert("Result not found");
+    alert("Result not found. Please check Class and Register Number.");
     history.back();
     return;
   }
 
   const stu = stuSnap.docs[0].data();
-  sName.innerText = stu.name;
-  sReg.innerText = reg;
-  sClass.innerText = cls;
+  document.getElementById("sName").innerText = stu.name;
+  document.getElementById("sReg").innerText = reg;
+  document.getElementById("sClass").innerText = cls;
 
   // Fetch Rank
   const resSnap = await db.collection("results")
@@ -161,7 +167,7 @@ async function loadResult(){
     .where("reg","==",reg)
     .get();
 
-  sRank.innerText = resSnap.empty ? "-" : resSnap.docs[0].data().rank;
+  document.getElementById("sRank").innerText = resSnap.empty ? "-" : resSnap.docs[0].data().rank;
 
   // Fetch Attendance
   const attSnap = await db.collection("attendance")
@@ -187,7 +193,6 @@ async function loadResult(){
   const marksTbody = document.getElementById("marks");
   marksTbody.innerHTML = "";
 
-  // ആവർത്തിച്ചു വരുന്ന വിഷയങ്ങൾ ഒഴിവാക്കാനുള്ള പുതിയ വഴി
   const uniqueMarks = {};
 
   markSnap.forEach(d => {
@@ -229,124 +234,4 @@ function downloadPDF(){
 </script>
 
 </body>
-</html>
-  <button class="download" onclick="downloadPDF()">Download PDF</button>
-  <button class="back" onclick="history.back()">Back</button>
-</div>
-</div>
-
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-
-<script>
-firebase.initializeApp({
-  apiKey: "AIzaSyAYqP10IiFNHEgOEn3ptlIUcj_wLY7XKZs",
-  authDomain: "madrasa-result-system-1698b.firebaseapp.com",
-  projectId: "madrasa-result-system-1698b"
-});
-
-const db = firebase.firestore();
-
-const params = new URLSearchParams(location.search);
-const mid = params.get("mid");
-const cls = params.get("class");
-const reg = params.get("reg");
-
-async function loadResult(){
-
-  const madSnap = await db.collection("madrasas").doc(mid).get();
-  if(!madSnap.exists){
-    alert("Invalid Madrasa ID");
-    return;
-  }
-  const mad = madSnap.data();
-  madName.innerText = mad.name;
-
-  const stuSnap = await db.collection("students")
-    .where("madrasaId","==",mid)
-    .where("class","==",cls)
-    .where("reg","==",reg)
-    .get();
-
-  if(stuSnap.empty){
-    alert("Result not found");
-    history.back();
-    return;
-  }
-
-  const stu = stuSnap.docs[0].data();
-  sName.innerText = stu.name;
-  sReg.innerText = reg;
-  sClass.innerText = cls;
-
-  // Fetch Rank
-  const resSnap = await db.collection("results")
-    .where("madrasaId","==",mid)
-    .where("class","==",cls)
-    .where("reg","==",reg)
-    .get();
-
-  sRank.innerText = resSnap.empty ? "-" : resSnap.docs[0].data().rank;
-
-  // Fetch Attendance
-  const attSnap = await db.collection("attendance")
-    .where("madrasaId","==",mid)
-    .where("class","==",cls)
-    .where("reg","==",reg)
-    .get();
-
-  if(!attSnap.empty){
-      document.getElementById("attBox").style.display = "block";
-      document.getElementById("attendance").innerText = attSnap.docs[0].data().attendance;
-  }
-
-  // Fetch Marks
-  const markSnap = await db.collection("marks")
-    .where("madrasaId","==",mid)
-    .where("class","==",cls)
-    .where("reg","==",reg)
-    .get();
-
-  let total = 0;
-  let status = "PASSED";
-  const marksTbody = document.getElementById("marks");
-  marksTbody.innerHTML = "";
-
-  markSnap.forEach(d=>{
-    const m = d.data();
-    marksTbody.innerHTML += `
-    <tr>
-      <td>${m.subject}</td>
-      <td>${m.mark}</td>
-    </tr>
-    `;
-    
-    // മാർക്ക് ഒരു നമ്പർ ആണെങ്കിൽ മാത്രം കൂട്ടുക, അല്ലെങ്കിൽ (ഉദാഹരണത്തിന് 'A') തോറ്റതായി കണക്കാക്കുക
-    if(typeof m.mark === 'number' || (!isNaN(m.mark) && m.mark.toString().trim() !== "")) {
-        let markVal = Number(m.mark);
-        total += markVal;
-        if(markVal < mad.passmark) {
-            status = "FAILED";
-        }
-    } else {
-        status = "FAILED"; // 'A' പോലെയുള്ള അക്ഷരങ്ങൾ വന്നാൽ FAILED ആകും
-    }
-  });
-
-  document.getElementById("total").innerText = total;
-  
-  const statusEl = document.getElementById("status");
-  statusEl.innerText = status;
-  statusEl.className = status === "PASSED" ? "status-pass" : "status-fail";
-}
-
-loadResult();
-
-function downloadPDF(){
-  html2pdf().from(document.getElementById("resultCard")).save();
-}
-</script>
-
-</body>
-
 </html>
