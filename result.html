@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="ml">
 <head>
 <meta charset="UTF-8">
 <meta name="google-adsense-account" content="ca-pub-8490206815383590">
@@ -9,59 +9,22 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
 <style>
-body{
-  margin:0;
-  font-family:Arial, sans-serif;
-  background:#f2f4f7;
-}
-.container{
-  max-width:900px;
-  margin:20px auto;
-  padding:0 12px;
-}
-.card{
-  background:#fff;
-  border-radius:18px;
-  padding:20px;
-  box-shadow:0 6px 20px rgba(0,0,0,.08);
-}
+body{ margin:0; font-family:Arial, sans-serif; background:#f2f4f7; }
+.container{ max-width:900px; margin:20px auto; padding:0 12px; }
+.card{ background:#fff; border-radius:18px; padding:20px; box-shadow:0 6px 20px rgba(0,0,0,.08); }
 .header{text-align:center}
 .header h2{margin:0}
 .header small{color:#555}
 .hr{height:1px;background:#ddd;margin:15px 0}
-.grid{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:8px 20px;
-}
-@media(max-width:640px){
-  .grid{grid-template-columns:1fr}
-}
-table{
-  width:100%;
-  border-collapse:collapse;
-  margin-top:15px;
-}
-th,td{
-  border:1px solid #ddd;
-  padding:10px;
-}
+.grid{ display:grid; grid-template-columns:1fr 1fr; gap:8px 20px; }
+@media(max-width:640px){ .grid{grid-template-columns:1fr} }
+table{ width:100%; border-collapse:collapse; margin-top:15px; }
+th,td{ border:1px solid #ddd; padding:10px; }
 th{background:#f5f5f5}
 .status-pass{color:green;font-weight:bold}
 .status-fail{color:red;font-weight:bold}
-.buttons{
-  margin-top:18px;
-  display:flex;
-  flex-direction:column;
-  gap:10px;
-}
-button{
-  padding:14px;
-  border:none;
-  border-radius:14px;
-  font-size:15px;
-  cursor:pointer;
-}
+.buttons{ margin-top:18px; display:flex; flex-direction:column; gap:10px; }
+button{ padding:14px; border:none; border-radius:14px; font-size:15px; cursor:pointer; }
 .download{background:#00796b;color:#fff}
 .back{background:#607d8b;color:#fff}
 </style>
@@ -114,7 +77,6 @@ button{
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
 <script>
-// നിങ്ങളുടെ പഴയ API വിവരങ്ങൾ തന്നെ ഇവിടെ നൽകിയിട്ടുണ്ട്
 firebase.initializeApp({
   apiKey: "AIzaSyAYqP10IiFNHEgOEn3ptlIUcj_wLY7XKZs",
   authDomain: "madrasa-result-system-1698b.firebaseapp.com",
@@ -122,108 +84,115 @@ firebase.initializeApp({
 });
 
 const db = firebase.firestore();
-
 const params = new URLSearchParams(location.search);
-// ചെറിയൊരു മാറ്റം: സ്പേസ് വന്നാൽ എറർ വരാതിരിക്കാൻ trim() നൽകി
-const mid = params.get("mid") ? params.get("mid").trim() : null;
+
+const mid = params.get("mid") ? params.get("mid").trim().toUpperCase() : null;
 const cls = params.get("class") ? params.get("class").trim() : null;
-const reg = params.get("reg") ? params.get("reg").trim() : null;
+const reg = params.get("reg") ? params.get("reg").trim().toUpperCase() : null;
+
+// Text ആയും Number ആയും ഡാറ്റ തിരയാനുള്ള പ്രത്യേക ഫംഗ്ഷൻ
+async function getDocsWithReg(collectionName) {
+    let snap = await db.collection(collectionName)
+        .where("madrasaId", "==", mid)
+        .where("class", "==", cls)
+        .where("reg", "==", reg) // ആദ്യം Text ആയി തിരയുന്നു
+        .get();
+        
+    // Text ആയി കിട്ടിയില്ലെങ്കിൽ, അതിനെ ഒരു Number ആക്കി മാറ്റി തിരയുന്നു (ഉദാ: "1234" -> 1234)
+    if (snap.empty && !isNaN(reg)) {
+        snap = await db.collection(collectionName)
+            .where("madrasaId", "==", mid)
+            .where("class", "==", cls)
+            .where("reg", "==", Number(reg)) // Number ആയി തിരയുന്നു
+            .get();
+    }
+    return snap;
+}
 
 async function loadResult(){
   if(!mid || !cls || !reg) {
-      alert("Invalid Link Parameters");
+      alert("Invalid Link. ദയവായി ക്ലാസ്സും രജിസ്റ്റർ നമ്പറും നൽകുക.");
       return;
   }
 
-  const madSnap = await db.collection("madrasas").doc(mid).get();
-  if(!madSnap.exists){
-    alert("Invalid Madrasa ID");
-    return;
-  }
-  const mad = madSnap.data();
-  document.getElementById("madName").innerText = mad.name;
+  try {
+      const madSnap = await db.collection("madrasas").doc(mid).get();
+      if(!madSnap.exists){
+        alert("Invalid Madrasa ID");
+        return;
+      }
+      const mad = madSnap.data();
+      document.getElementById("madName").innerText = mad.name;
 
-  const stuSnap = await db.collection("students")
-    .where("madrasaId","==",mid)
-    .where("class","==",cls)
-    .where("reg","==",reg)
-    .get();
+      // കുട്ടിയുടെ വിവരങ്ങൾ എടുക്കുന്നു
+      const stuSnap = await getDocsWithReg("students");
 
-  if(stuSnap.empty){
-    alert("Result not found. Please check Class and Register Number.");
-    history.back();
-    return;
-  }
+      if(stuSnap.empty){
+        alert("Result not found! രജിസ്റ്റർ നമ്പർ കൃത്യമാണോ എന്ന് പരിശോധിക്കുക.");
+        history.back();
+        return;
+      }
 
-  const stu = stuSnap.docs[0].data();
-  document.getElementById("sName").innerText = stu.name;
-  document.getElementById("sReg").innerText = reg;
-  document.getElementById("sClass").innerText = cls;
+      const stu = stuSnap.docs[0].data();
+      document.getElementById("sName").innerText = stu.name;
+      document.getElementById("sReg").innerText = reg;
+      document.getElementById("sClass").innerText = cls;
 
-  // Fetch Rank
-  const resSnap = await db.collection("results")
-    .where("madrasaId","==",mid)
-    .where("class","==",cls)
-    .where("reg","==",reg)
-    .get();
+      // Rank എടുക്കുന്നു 
+      const resSnap = await getDocsWithReg("results");
+      document.getElementById("sRank").innerText = resSnap.empty ? "-" : resSnap.docs[0].data().rank;
 
-  document.getElementById("sRank").innerText = resSnap.empty ? "-" : resSnap.docs[0].data().rank;
+      // Attendance എടുക്കുന്നു
+      const attSnap = await getDocsWithReg("attendance");
+      if(!attSnap.empty){
+          document.getElementById("attBox").style.display = "block";
+          document.getElementById("attendance").innerText = attSnap.docs[0].data().attendance;
+      }
 
-  // Fetch Attendance
-  const attSnap = await db.collection("attendance")
-    .where("madrasaId","==",mid)
-    .where("class","==",cls)
-    .where("reg","==",reg)
-    .get();
+      // മാർക്കുകൾ എടുക്കുന്നു
+      const markSnap = await getDocsWithReg("marks");
 
-  if(!attSnap.empty){
-      document.getElementById("attBox").style.display = "block";
-      document.getElementById("attendance").innerText = attSnap.docs[0].data().attendance;
-  }
+      let total = 0;
+      let status = "PASSED";
+      const marksTbody = document.getElementById("marks");
+      marksTbody.innerHTML = "";
 
-  // Fetch Marks
-  const markSnap = await db.collection("marks")
-    .where("madrasaId","==",mid)
-    .where("class","==",cls)
-    .where("reg","==",reg)
-    .get();
+      const uniqueMarks = {};
 
-  let total = 0;
-  let status = "PASSED";
-  const marksTbody = document.getElementById("marks");
-  marksTbody.innerHTML = "";
+      markSnap.forEach(d => {
+        const m = d.data();
+        uniqueMarks[m.subject] = m.mark; 
+      });
 
-  const uniqueMarks = {};
-
-  markSnap.forEach(d => {
-    const m = d.data();
-    uniqueMarks[m.subject] = m.mark; 
-  });
-
-  for (const [subject, mark] of Object.entries(uniqueMarks)) {
-    marksTbody.innerHTML += `
-    <tr>
-      <td>${subject}</td>
-      <td>${mark}</td>
-    </tr>
-    `;
-    
-    if(typeof mark === 'number' || (!isNaN(mark) && mark.toString().trim() !== "")) {
-        let markVal = Number(mark);
-        total += markVal;
-        if(markVal < mad.passmark) {
-            status = "FAILED";
+      for (const [subject, mark] of Object.entries(uniqueMarks)) {
+        marksTbody.innerHTML += `
+        <tr>
+          <td>${subject}</td>
+          <td>${mark}</td>
+        </tr>
+        `;
+        
+        if(typeof mark === 'number' || (!isNaN(mark) && mark.toString().trim() !== "")) {
+            let markVal = Number(mark);
+            total += markVal;
+            if(markVal < mad.passmark) {
+                status = "FAILED";
+            }
+        } else {
+            status = "FAILED"; 
         }
-    } else {
-        status = "FAILED"; 
-    }
-  }
+      }
 
-  document.getElementById("total").innerText = total;
-  
-  const statusEl = document.getElementById("status");
-  statusEl.innerText = status;
-  statusEl.className = status === "PASSED" ? "status-pass" : "status-fail";
+      document.getElementById("total").innerText = total;
+      
+      const statusEl = document.getElementById("status");
+      statusEl.innerText = status;
+      statusEl.className = status === "PASSED" ? "status-pass" : "status-fail";
+
+  } catch (error) {
+      console.error(error);
+      alert("Error: " + error.message);
+  }
 }
 
 loadResult();
